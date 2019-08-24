@@ -1,7 +1,8 @@
 import json
 import bz2
 import logging
-from typing import cast, List, Any, Iterable, BinaryIO
+import sqlite3
+from typing import cast, List, Any, Iterable, BinaryIO, Optional
 
 import dataset
 import dataset.budgetary
@@ -17,63 +18,82 @@ from util.codec_progress import CodecProgress, listCP, oneCP, enum_by_typenameCP
 
 log = logging.getLogger(__name__)
 
-PREST_SIGNATURE = b'Prest Workspace\0'
-FILE_FORMAT_VERSION = 16
-
-DatasetCP : CodecProgress = enum_by_typenameCP('Dataset', [
-    (cls, cls.get_codec_progress())
-    for cls in dataset.Dataset.__subclasses__()
-])
+SQL_FORMAT_VERSION = 16
 
 class PersistenceError(Exception):
     pass
 
 class Workspace:
     def __init__(self):
-        self.datasets: List[dataset.Dataset] = []
+        self.db = sqlite3.connect(':memory:')
+        self.file_name : Optional[str] = None
+
+        with self.db.cursor() as cur:
+            cur.execute('PRAGMA foreign_keys = 1')
+            cur.execute('''
+                CREATE TABLE meta (
+                    name TEXT NOT NULL PRIMARY KEY,
+                    value TEXT NOT NULL,
+                );
+
+                INSERT INTO meta VALUES
+                    ('sql_format_version', %s),
+                    ('prest_version', %s);
+
+                CREATE TABLE dataset (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                );
+
+                CREATE TABLE alternative (
+                    dataset_id INTEGER NOT NULL,
+                    alt_number INTEGER NOT NULL,
+
+                    PRIMARY KEY (dataset_id, alt_number),
+                    FOREIGN KEY (dataset_id) REFERENCES dataset(id)
+                );
+
+                CREATE TABLE subject (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    dataset_id INTEGER NOT NULL,
+
+                    FOREIGN KEY (dataset_id) REFERENCES dataset(id)
+                );
+
+                CREATE TABLE observation (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    subject_id INTEGER NOT NULL,
+                    menu TEXT NOT NULL,
+                    default TEXT NOT NULL,
+                    choice TEXT NOT NULL,
+                    
+                    FOREIGN KEY (subject_id) REFERENCES subject(id)
+                );
+            ''', SQL_FORMAT_VERSION, branding.VERSION)
 
     def save_to_file(self, worker : Worker, fname: str) -> None:
-        with bz2.open(fname, 'wb') as f:
-            f = cast(FileOut, f)  # assert we're doing output
+        if fname == self.file_name:
+            return  # nothing to do, the changes should already be in
 
-            f.write(PREST_SIGNATURE)
-            intC.encode(f, FILE_FORMAT_VERSION)  # version
-            strC.encode(f, branding.VERSION)
+        db_old = self.db
+        db_new = sqlite3.connect(fname)
+        db_new.execute('PRAGMA foreign_keys = 1')
 
-            work_size = listCP(DatasetCP).get_size(self.datasets)
-            intC.encode(f, work_size)
+        # TODO: progress=...
+        db_old.backup(db_new)
 
-            worker.set_work_size(work_size)
-            listCP(DatasetCP).encode(worker, f, self.datasets)
+        self.db = db_new
+        self.file_name = fname
+        db_old.close()
 
     def load_from_file(self, worker : Worker, fname: str) -> None:
-        with bz2.open(fname, 'rb') as f:
-            f = cast(FileIn, f)  # assert we're doing input
+        db_new = sqlite3.connect(fname)
+        db_new.execute('PRAGMA foreign_keys = 1')
 
-            sig = f.read(len(PREST_SIGNATURE))
-            if sig != PREST_SIGNATURE:
-                raise PersistenceError('not a Prest workspace file')
+        # TODO: check version
+        # TODO: run migrations
 
-            version = intC.decode(f)
-            if version >= 3:
-                prest_version = strC.decode(f)
-            else:
-                prest_version = None  # too old
-
-            if version != FILE_FORMAT_VERSION:
-                message = 'incompatible PWF version: expected {0}, received {1}'.format(
-                    FILE_FORMAT_VERSION,
-                    version,
-                )
-
-                if prest_version:
-                    message += ' (saved by {0})'.format(prest_version)
-
-                raise PersistenceError(message)
-
-            work_size = intC.decode(f)
-            worker.set_work_size(work_size)
-            datasets = listCP(DatasetCP).decode(worker, f)
-
-        # assign to self only once everything's gone all right
-        self.datasets = datasets
+        self.db.close()
+        self.db = db_new
+        self.file_name = fname
