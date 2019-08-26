@@ -25,6 +25,9 @@ class PersistenceError(Exception):
 
 class Workspace:
     def __init__(self):
+        self.clear()
+
+    def clear(self):
         self.db = sqlite3.connect(':memory:')
         self.file_name : Optional[str] = None
 

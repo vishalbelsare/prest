@@ -280,7 +280,7 @@ class MainWindow(QMainWindow, uic.main_window.Ui_MainWindow, gui.ExceptionDialog
                     )
                     return
 
-        self.workspace.datasets = []
+        self.workspace.clear()
         self.setWindowModified(False)
         self.setWindowFilePath(None)
         self.refresh_datasets()
