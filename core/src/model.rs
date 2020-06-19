@@ -345,9 +345,9 @@ impl Instance {
                         } else {
                             // mismatch
                             if fc {
-                                (inst_choice.size() as f64).log2()
+                                (cr.menu.size() as f64).log2()
                             } else {
-                                ((inst_choice.size() + 1) as f64).log2()
+                                ((cr.menu.size() + 1) as f64).log2()
                             }
                         }
                     }
@@ -359,9 +359,9 @@ impl Instance {
                         } else {
                             // mismatch
                             if fc {
-                                (inst_choice.size() as f64).log2()
+                                (cr.menu.size() as f64).log2()
                             } else {
-                                ((inst_choice.size() + 1) as f64).log2()
+                                ((cr.menu.size() + 1) as f64).log2()
                             }
                         }
                     }
