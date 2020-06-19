@@ -268,6 +268,7 @@ mod test {
         }
     }
 
+    /*
     #[test]
     fn top_two() {
         use model::Model;
@@ -295,6 +296,7 @@ mod test {
         assert_eq!(response.minimal_entropy, 0.0);
         assert_eq!(response.best_instances.len(), 2);
     }
+    */
 
     #[test]
     fn undominated_detail() {
@@ -327,6 +329,7 @@ mod test {
         }
     }
 
+    /*
     #[test]
     fn seqrc() {
         use model::Model;
@@ -411,6 +414,7 @@ mod test {
             II{ model: m, entropy: 2.0, instance: vec![2, 5, 5, 2, 4, 15, 31] },
         ]);
     }
+    */
 
     #[test]
     fn indecisive() {
