@@ -42,6 +42,13 @@ branches:
   except:
   - /^untagged-/
 
+before_deploy:
+  # Set up git user name and tag this commit
+  - git config --local user.name "prest"
+  - git config --local user.email "prest@prestsoftware.com"
+  - export TRAVIS_TAG=${TRAVIS_TAG:-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)}
+  - git tag $TRAVIS_TAG
+
 deploy:
 - provider: releases
   api_key:
