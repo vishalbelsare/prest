@@ -19,7 +19,7 @@ from core import Core
 from dataset import Dataset, DatasetHeaderC, ChoiceRow, ChoiceRowC, \
     Subject, SubjectC, ExportVariant, Analysis, PackedSubject, PackedSubjectC
 from gui.progress import Worker
-from dataset.estimation_result import EstimationResult, Penalty, PenaltyC
+from dataset.estimation_result import EstimationResult
 from dataset.consistency_result import ConsistencyResult
 from dataset.experiment_stats import ExperimentStats
 from dataset.tuple_intrans_alts import TupleIntransAlts
@@ -276,6 +276,7 @@ class ExperimentalData(Dataset):
                 request = estimation_result.Request(
                     subjects=self.subjects[i:i+CHUNK_SIZE],
                     models=options.models,
+                    forced_choice=options.forced_choice,
                     disable_parallelism=options.disable_parallelism,
                 )
 

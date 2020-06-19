@@ -41,27 +41,41 @@
      </column>
      <column>
       <property name="text">
-       <string> </string>
+       <string/>
       </property>
      </column>
      <column>
       <property name="text">
-       <string> </string>
+       <string/>
       </property>
      </column>
      <column>
       <property name="text">
-       <string> </string>
+       <string/>
       </property>
      </column>
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="cbDisableParallelism">
-     <property name="text">
-      <string>Disable parallelism</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QCheckBox" name="cbForcedChoice">
+       <property name="text">
+        <string>Forced Choice</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="cbDisableParallelism">
+       <property name="text">
+        <string>Disable parallelism</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">

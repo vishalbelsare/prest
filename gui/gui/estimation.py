@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 
 class Options(NamedTuple):
     models : List[Model]
+    forced_choice : bool
     disable_parallelism : bool
 
 class Estimation(QDialog, uic.estimation.Ui_Estimation, gui.ExceptionDialog):
@@ -106,6 +107,7 @@ class Estimation(QDialog, uic.estimation.Ui_Estimation, gui.ExceptionDialog):
     def value(self) -> Options:
         return Options(
             models=[model for cb, model in self.checkboxes if cb.isChecked()],
+            forced_choice=self.cbForcedChoice.isChecked(),
             disable_parallelism=self.cbDisableParallelism.isChecked(),
         )
 
