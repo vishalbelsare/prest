@@ -108,7 +108,7 @@ class EstimationResult(Dataset):
         def __init__(self, parent_node, row: int, subject: Subject) -> None:
             Node.__init__(
                 self, parent_node, row,
-                fields=(subject.name, str(subject.entropy), '%d models' % len(subject.best_models)),
+                fields=(subject.name, '%.3f' % subject.entropy, '%d models' % len(subject.best_models)),
                 child_count=len(subject.best_models),
             )
             self.subject = subject
@@ -124,7 +124,7 @@ class EstimationResult(Dataset):
             subject = parent_node.subject
             Node.__init__(
                 self, parent_node, row,
-                fields=(model_get_name(model), entropy, '%d instances' % len(instances)),
+                fields=(model_get_name(model), '%.3f' % entropy, '%d instances' % len(instances)),
                 child_count=len(instances),
             )
             self.instances = instances
