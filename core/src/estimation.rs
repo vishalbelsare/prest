@@ -253,7 +253,7 @@ mod test {
     use preorder;
     use fast_preorder;
     use base64;
-    use model::{Instance,Penalty};
+    use model::{Instance};
     use codec;
     use alt_set::AltSet;
     use alt::Alt;
@@ -290,9 +290,9 @@ mod test {
         let models = [Model::TopTwo];
         let mut precomputed = Precomputed::new(None);
         precomputed.precompute(4).unwrap();
-        let response = super::run_one(&precomputed, &subject, &models).unwrap();
+        let response = super::run_one(&precomputed, true, &subject, &models).unwrap();
 
-        assert_eq!(response.score, Penalty::exact(0));
+        assert_eq!(response.minimal_entropy, 0.0);
         assert_eq!(response.best_instances.len(), 2);
     }
 
@@ -349,25 +349,24 @@ mod test {
 
         let mut precomputed = Precomputed::new(None);
         precomputed.precompute(4).unwrap();
-        let response = super::run_one(&precomputed, &subject, &models).unwrap();
+        let response = super::run_one(&precomputed, true, &subject, &models).unwrap();
 
-        assert_eq!(response.score, Penalty::exact(0));
+        assert_eq!(response.minimal_entropy, 0.0);
         assert_eq!(response.best_instances.len(), 11);
 
         let model = Model::SequentiallyRationalizableChoice;
-        let penalty = Penalty::exact(0);
         assert_eq!(response.best_instances, vec![
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 9, 4, 7, 6, 4, 14] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 11, 4, 7, 6, 4, 12] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 11, 4, 7, 6, 4, 14] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 11, 4, 15, 6, 4, 12] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 13, 4, 7, 6, 4, 14] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 8] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 12] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 14] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 6, 4, 8] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 6, 4, 12] },
-            II{ model, penalty: penalty.clone(), instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 14, 4, 8] }
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 9, 4, 7, 6, 4, 14] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 11, 4, 7, 6, 4, 12] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 11, 4, 7, 6, 4, 14] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 11, 4, 15, 6, 4, 12] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 13, 4, 7, 6, 4, 14] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 8] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 12] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 7, 6, 4, 14] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 6, 4, 8] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 6, 4, 12] },
+            II{ model, entropy: 0f64, instance: vec![7, 4, 1, 2, 5, 15, 4, 15, 14, 4, 8] }
         ]);
     }
 
@@ -401,15 +400,15 @@ mod test {
                 [3,4] -> [3]
         ]);
 
-        let response = super::run_one(&precomputed, &subject, &models).unwrap();
-        assert_eq!(response.score, Penalty::exact(2));
+        let response = super::run_one(&precomputed, false, &subject, &models).unwrap();
+        assert_eq!(response.minimal_entropy, 2.0);
         assert_eq!(response.best_instances.len(), 3);
 
         let m = Model::UndominatedChoice{strict: true};
         assert_eq!(response.best_instances, vec![
-            II{ model: m, penalty: Penalty::exact(2), instance: vec![2, 5, 1, 2, 4, 15, 31] },
-            II{ model: m, penalty: Penalty::exact(2), instance: vec![2, 5, 1, 2, 5, 15, 31] },
-            II{ model: m, penalty: Penalty::exact(2), instance: vec![2, 5, 5, 2, 4, 15, 31] },
+            II{ model: m, entropy: 2.0, instance: vec![2, 5, 1, 2, 4, 15, 31] },
+            II{ model: m, entropy: 2.0, instance: vec![2, 5, 1, 2, 5, 15, 31] },
+            II{ model: m, entropy: 2.0, instance: vec![2, 5, 5, 2, 4, 15, 31] },
         ]);
     }
 
@@ -478,11 +477,11 @@ mod test {
         let instance = model::Instance::PreorderMaximization(p);
         assert_eq!(instance.choice(alts![0,1].view(), None), alts![]);
 
-        let response = super::run_one(&precomputed, &subject, &models).unwrap();
-        assert_eq!(response.score, Penalty::exact(0));
+        let response = super::run_one(&precomputed, false, &subject, &models).unwrap();
+        assert_eq!(response.minimal_entropy, 0.0);
         assert_eq!(response.best_instances, vec![super::InstanceInfo{
             model: PM(PP{ strict: None, total: None }),
-            penalty: Penalty::exact(0),
+            entropy: 0f64,
             instance: vec![0, 5, 1, 2, 4, 8, 16],
         }]);
     }
