@@ -50,6 +50,10 @@ class TopTwo(NamedTuple):
 class SequentiallyRationalizableChoice(NamedTuple):
     tag : int = 7
 
+class SequentialDomination(NamedTuple):
+    strict : bool
+    tag : int = 8
+
 Model = Union[
     PreorderMaximization,
     Unattractiveness,
@@ -59,6 +63,7 @@ Model = Union[
     Overload,
     TopTwo,
     SequentiallyRationalizableChoice,
+    SequentialDomination,
 ]
 
 ModelC = enumC('Model', {
@@ -70,6 +75,7 @@ ModelC = enumC('Model', {
     Overload: (PreorderParamsC,),
     TopTwo: (),
     SequentiallyRationalizableChoice: (),
+    SequentialDomination: (boolC,),
 })
 
 # dicts are ordered from python 3.5 onwards
@@ -104,6 +110,10 @@ SPECIAL_NAMES = {
         'Top-Two Choice',
     SequentiallyRationalizableChoice():
         'Sequentially Rationalizable Choice',
+    SequentialDomination(strict=True):
+        'Sequential Domination (Strict)',
+    SequentialDomination(strict=False):
+        'Sequential Domination (Non-strict)',
 }
 
 ORDERING_INDICES = (
@@ -182,6 +192,11 @@ MODELS = [
                 'models/fc.html#sequentially-rationalizable-choice',
                 ('Strict', SequentiallyRationalizableChoice()),
                 None,
+            ),
+            mgroup('Sequential Domination',
+                'models/fc.html',
+                ('Strict', SequentialDomination(strict=True)),
+                ('Non-strict', SequentialDomination(strict=False)),
             ),
             # mgroup('Choice with limited attention'),
         )),

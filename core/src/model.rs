@@ -72,6 +72,7 @@ pub enum Model {
     Overload(PreorderParams),
     TopTwo,
     SequentiallyRationalizableChoice,
+    SequentialDomination{ strict : bool },
 }
 
 impl Encode for Model {
@@ -85,6 +86,7 @@ impl Encode for Model {
             &Model::Overload(p) => (5u8, p).encode(f),
             &Model::TopTwo => 6u8.encode(f),
             &Model::SequentiallyRationalizableChoice => 7u8.encode(f),
+            &Model::SequentialDomination{strict} => (8u8,strict).encode(f),
         }
     }
 }
@@ -100,6 +102,7 @@ impl Decode for Model {
             5u8 => Ok(Model::Overload(Decode::decode(f)?)),
             6u8 => Ok(Model::TopTwo),
             7u8 => Ok(Model::SequentiallyRationalizableChoice),
+            8u8 => Ok(Model::SequentialDomination{strict: Decode::decode(f)?}),
             _ => Err(codec::Error::BadEnumTag),
         }
     }
@@ -124,6 +127,7 @@ pub enum Instance {
     },
     TopTwo(Preorder),
     SequentiallyRationalizableChoice(Preorder, Preorder),
+    SequentialDomination(Preorder),
 }
 
 impl Encode for Instance {
@@ -152,6 +156,9 @@ impl Encode for Instance {
 
             &Instance::SequentiallyRationalizableChoice(ref p, ref q)
                 => (7u8, p, q).encode(f),
+
+            &Instance::SequentialDomination(ref p)
+                => (8u8, p).encode(f),
         }
     }
 }
@@ -179,6 +186,7 @@ impl Decode for Instance {
                 Decode::decode(f)?,
                 Decode::decode(f)?,
             )),
+            8u8 => Ok(Instance::SequentialDomination(Decode::decode(f)?)),
             _ => Err(codec::Error::BadEnumTag),
         }
     }
@@ -199,6 +207,22 @@ fn undominated_choice(p : &Preorder, menu : AltSetView) -> AltSet {
         // there is no j that would dominate i
         |&i| !menu.iter().any(|j| p.lt(i, j))
     ).collect()
+}
+
+fn partially_dominant_choice(p : &Preorder, menu : AltSetView) -> AltSet {
+    // for efficiency, we *could* rely on p being strict here
+    // (because it is for this model)
+    // and check only Preorder::leq() rather than Preorder::lt()
+    //
+    // however, this requires an extra check that i != j
+    // and feels quite error-prone so let's go
+    // with the slightly more fool-proof and less efficient option
+    //
+    // we may revisit this in the future
+    menu.iter().filter(|&i| {
+           menu.iter().all(|j| !p.lt(i, j))  // is not dominated itself
+        && menu.iter().any(|j|  p.lt(j, i))  // but dominates *something*
+    }).collect()
 }
 
 impl Instance {
@@ -227,6 +251,9 @@ impl Instance {
 
             &Instance::SequentiallyRationalizableChoice(_,_) =>
                 Model::SequentiallyRationalizableChoice,
+
+            &Instance::SequentialDomination(ref p) =>
+                Model::SequentialDomination{strict: p.is_strict()},
         }
     }
 
@@ -249,20 +276,7 @@ impl Instance {
             }
 
             &Instance::PartiallyDominantChoice{ref p, fc} => {
-                // for efficiency, we *could* rely on p being strict here
-                // (because it is for this model)
-                // and check only Preorder::leq() rather than Preorder::lt()
-                //
-                // however, this requires an extra check that i != j
-                // and feels quite error-prone so let's go
-                // with the slightly more fool-proof and less efficient option
-                //
-                // we may revisit this in the future
-                let result : AltSet = menu.iter().filter(|&i| {
-                       menu.iter().all(|j| !p.lt(i, j))  // is not dominated itself
-                    && menu.iter().any(|j|  p.lt(j, i))  // but dominates *something*
-                }).collect();
-
+                let result = partially_dominant_choice(p, menu);
                 if result.view().is_empty() && fc {
                     // if there's no such element but we must choose
                     // we choose everything
@@ -270,6 +284,23 @@ impl Instance {
                 } else {
                     result
                 }
+            }
+
+            &Instance::SequentialDomination(ref p) => {
+                // first, try MDC
+                let mdc = preorder_maximization(p, menu);
+                if !mdc.view().is_empty() {
+                    return mdc;
+                }
+
+                // if that does not yield a solution, try PDC
+                let pdc = partially_dominant_choice(p, menu);
+                if !pdc.view().is_empty() {
+                    return pdc;
+                }
+
+                // finally, try UC
+                undominated_choice(p, menu)
             }
 
             &Instance::StatusQuoUndominatedChoice(ref p) => {
@@ -545,6 +576,14 @@ pub fn traverse_all<F>(
                 PreorderParams{strict: Some(strict), total: Some(false)},
                 alt_count,
                 &mut |p| f(Instance::UndominatedChoice(p))
+            ).map_err(&ann)?,
+
+        Model::SequentialDomination{strict}
+            => traverse_preorders(
+                precomputed,
+                PreorderParams{strict: Some(strict), total: Some(false)},
+                alt_count,
+                &mut |p| f(Instance::SequentialDomination(p))
             ).map_err(&ann)?,
 
         Model::PartiallyDominantChoice{fc}
