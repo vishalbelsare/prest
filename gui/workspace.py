@@ -18,7 +18,7 @@ from util.codec_progress import CodecProgress, listCP, oneCP, enum_by_typenameCP
 log = logging.getLogger(__name__)
 
 PREST_SIGNATURE = b'Prest Workspace\0'
-FILE_FORMAT_VERSION = 16
+FILE_FORMAT_VERSION = 17
 
 DatasetCP : CodecProgress = enum_by_typenameCP('Dataset', [
     (cls, cls.get_codec_progress())
