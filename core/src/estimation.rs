@@ -1,5 +1,4 @@
-use std::collections::HashSet;
-use model::{self,Penalty,Model,Instance,PreorderParams};
+use model::{self,Model,Instance,PreorderParams};
 use precomputed::{self,Precomputed};
 use std::result;
 use std::fmt;
@@ -7,7 +6,6 @@ use std::convert::From;
 use std::io::{Read,Write};
 use rpc_common::{Subject,ChoiceRow};
 use codec::{self,Encode,Decode,Packed};
-use std::iter::FromIterator;
 use rayon::prelude::*;
 
 pub type Result<T> = result::Result<T, EstimationError>;
@@ -52,6 +50,7 @@ impl From<precomputed::Error> for EstimationError {
 pub struct Request {
     subjects : Vec<Packed<Subject>>,
     models : Vec<model::Model>,
+    fc : bool,
     disable_parallelism : bool,
 }
 
@@ -60,24 +59,25 @@ impl Decode for Request {
         Ok(Request {
             subjects: Decode::decode(f)?,
             models: Decode::decode(f)?,
+            fc: Decode::decode(f)?,
             disable_parallelism: Decode::decode(f)?,
         })
     }
 }
 
 // fields public for testing
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct InstanceInfo {
     pub model : Model,
-    pub penalty : Penalty,
+    pub entropy : f64,
     pub instance : Vec<u8>,
 }
 
 impl InstanceInfo {
-    pub fn from(model : Model, penalty : Penalty, inst : &Instance) -> Self {
+    pub fn from(model : Model, entropy : f64, inst : &Instance) -> Self {
         InstanceInfo {
             model,
-            penalty,
+            entropy,
             instance: codec::encode_to_memory(inst).unwrap(),
         }
     }
@@ -86,152 +86,90 @@ impl InstanceInfo {
 impl Encode for InstanceInfo {
     fn encode<W : Write>(&self, f : &mut W) -> codec::Result<()> {
         self.model.encode(f)?;
-        self.penalty.encode(f)?;
+        self.entropy.encode(f)?;
         self.instance.encode(f)
     }
 }
 
 pub struct Response {
     pub subject_name : String,
-    pub score : Penalty,
+    pub minimal_entropy : f64,
     pub best_instances : Vec<InstanceInfo>,
 }
 
 impl Encode for Response {
     fn encode<W : Write>(&self, f : &mut W) -> codec::Result<()> {
-        (&self.subject_name, self.score.clone(), &self.best_instances).encode(f)
+        (&self.subject_name, self.minimal_entropy, &self.best_instances).encode(f)
     }
 }
 
 struct BestInstances {
-    lowest_penalty : Option<Penalty>,
-    instances : HashSet<InstanceInfo>,
+    lowest_entropy : Option<f64>,
+    instances : Vec<InstanceInfo>,
 }
 
 impl BestInstances {
     fn new() -> Self {
         BestInstances {
-            lowest_penalty: None,
-            instances: HashSet::new(),
+            lowest_entropy: None,
+            instances: Vec::new(),
         }
     }
 
-    fn upper_bound_for(&self, model : Model) -> Option<u32> {
-        self.instances.iter().filter_map(|inst|
-            if inst.model == model {
-                Some(inst.penalty.upper_bound)
-            } else {
-                None
+    fn add_instance(&mut self, model : Model, entropy : f64, instance : Instance) {
+        if let Some(ref mut lowest_entropy) = self.lowest_entropy {
+            // HACK
+            if (entropy - *lowest_entropy).abs() <= 1e-9 {
+                // about the same entropy, include this
+                self.instances.push(InstanceInfo::from(model, entropy, &instance));
             }
-        ).max()
-    }
-
-    fn add_instance(&mut self, model : Model, this_penalty : Penalty, instance : Instance) {
-        if let Some(ref mut lowest_penalty) = self.lowest_penalty {
-            if this_penalty.upper_bound < lowest_penalty.lower_bound {
-                // yay! we're strictly better
+            else if entropy < *lowest_entropy {
+                // strictly better
                 self.instances.clear();
-                self.instances.insert(InstanceInfo::from(model, this_penalty.clone(), &instance));
-                *lowest_penalty = this_penalty;
-            } else if this_penalty.lower_bound > lowest_penalty.upper_bound {
-                // we're strictly worse, forget this instance
+                self.instances.push(InstanceInfo::from(model, entropy, &instance));
+                *lowest_entropy = entropy;
             } else {
-                // we're neither better nor worse, we have to keep this
-                lowest_penalty.merge_min(&this_penalty);
-                self.instances.insert(InstanceInfo::from(model, this_penalty, &instance));
-
-                // lowest_penalty.merge_min() may decrease the upper bound of lowest_penalty
-                // this may make some instances in best_instances obsolete --
-                // their lower bounds may become higher than the upper bound of lowest_penalty
-                // we don't care for now; we'll filter them out at the end of this function
-                //
-                // if this turns out to be too inefficient, we can:
-                // 1. keep the instances in a reverse (greatest-first) heap by lower bound
-                // 2. keep them in a binary search tree, again by lower bound
-                // both would allow us efficient pruning of obsolete instances
+                // we're strictly worse, forget this instance
             }
         } else {
             // no instances yet
             self.instances.clear();  // not necessary but let's do it anyway
-            self.instances.insert(InstanceInfo::from(model, this_penalty.clone(), &instance));
-            self.lowest_penalty = Some(this_penalty);
+            self.instances.push(InstanceInfo::from(model, entropy, &instance));
+            self.lowest_entropy = Some(entropy);
         }
     }
 
-    fn finish(self) -> Option<(Vec<InstanceInfo>, Penalty)> {  
-        if let Some(lowest_penalty) = self.lowest_penalty {
-            Some((
-                Vec::from_iter(
-                    self.instances.into_iter().filter(
-                        // pick only those instances that overlap with the best estimate
-                        |i| i.penalty.lower_bound <= lowest_penalty.upper_bound
-                    )
-                ),
-                lowest_penalty,
-            ))
+    fn finish(self) -> Option<(Vec<InstanceInfo>, f64)> {
+        if let Some(lowest_entropy) = self.lowest_entropy {
+            Some((self.instances, lowest_entropy))
         } else {
             // no instances
             None
         }
     }
 
-    fn combine(self, other : BestInstances) -> BestInstances {
-        match (self, other) {
-            (BestInstances{
-                lowest_penalty: Some(self_penalty),
-                instances: self_instances,
-             },
-             BestInstances{
-                lowest_penalty: Some(other_penalty),
-                instances: other_instances,
-             },
-            ) => {
-                if self_penalty.upper_bound < other_penalty.lower_bound {
-                    // self is strictly better
-                    BestInstances{
-                        lowest_penalty: Some(self_penalty),
-                        instances: self_instances,
-                    }
-                } else if self_penalty.lower_bound > other_penalty.upper_bound {
-                    // other is strictly better
-                    BestInstances{
-                        lowest_penalty: Some(other_penalty),
-                        instances: other_instances,
-                    }
+    fn combine(mut self, other : BestInstances) -> BestInstances {
+        match (self.lowest_entropy, other.lowest_entropy) {
+            (Some(se), Some(oe)) =>
+                if (se - oe).abs() <= 1e-9 {
+                    self.instances.extend(other.instances);
+                    self
+                } else if se < oe {
+                    self
                 } else {
-                    // neither is strictly better
-                    let mut penalty = self_penalty;
-                    penalty.merge_min(&other_penalty);
+                    other
+                },
 
-                    // usable instances from self
-                    let mut instances = HashSet::from_iter(
-                        self_instances.into_iter().filter(
-                            |i| i.penalty.lower_bound <= penalty.upper_bound
-                        )
-                    );
-
-                    // usable instances from other
-                    instances.extend(
-                        other_instances.into_iter().filter(
-                            |i| i.penalty.lower_bound <= penalty.upper_bound
-                        )
-                    );
-
-                    BestInstances{
-                        lowest_penalty: Some(penalty),
-                        instances,
-                    }
-                }
-            }
-
-            (BestInstances{ lowest_penalty: None, .. }, other) => other,
-            (xself, BestInstances{ lowest_penalty: None, .. }) => xself,
+            (Some(_), None) => self,
+            (None, Some(_)) => other,
+            (None, None) => self,
         }
     }
 }
 
 fn evaluate_model(
     precomputed : &Precomputed,
+    fc : bool,
     model : Model,
     alt_count : u32,
     choices : &[ChoiceRow],
@@ -241,7 +179,7 @@ fn evaluate_model(
     model::traverse_all(precomputed, model, alt_count, choices, &mut |inst| {
         model_instances.add_instance(
             model,
-            inst.penalty(choices),
+            inst.entropy(fc, choices),
             inst,
         )
     })?;
@@ -249,7 +187,7 @@ fn evaluate_model(
     Ok(model_instances)
 }
 
-pub fn run_one(precomputed : &Precomputed, subject : &Subject, models : &[Model]) -> Result<Response> {
+pub fn run_one(precomputed : &Precomputed, fc : bool, subject : &Subject, models : &[Model]) -> Result<Response> {
     let alt_count = subject.alternatives.len() as u32;
 
     let mut best_instances = BestInstances::new();
@@ -260,41 +198,17 @@ pub fn run_one(precomputed : &Precomputed, subject : &Subject, models : &[Model]
         }
 
         best_instances = best_instances.combine(
-            evaluate_model(precomputed, model, alt_count, &subject.choices)?
+            evaluate_model(precomputed, fc, model, alt_count, &subject.choices)?
         );
     }
 
-    // evaluate SRC only if:
-    // 1) it was chosen by the user
-    if models.contains(&Model::SequentiallyRationalizableChoice)
-        // 2) and there's no perfect rationalisation by UC
-        && best_instances.upper_bound_for(Model::UndominatedChoice{strict:true}) != Some(0)
-        // 3) and there's no perfect rationalisation by UM, either
-        && best_instances.upper_bound_for(Model::PreorderMaximization(
-            PreorderParams{strict: Some(true), total: Some(true)}
-        )) != Some(0)
-        // Note that we don't need to check non-strict models
-        // because if non-strict models rationalise perfectly
-        // then we have a multi-choice somewhere,
-        // which breaks the requirements of SRC (and won't get 0).
-    {
-        best_instances = best_instances.combine(
-            evaluate_model(
-                precomputed,
-                Model::SequentiallyRationalizableChoice,
-                alt_count,
-                &subject.choices
-            )?
-        );
-    }
-
-    let (mut best_instances, score) = best_instances.finish().unwrap();
-    best_instances.sort();
+    let (mut best_instances, minimal_entropy) = best_instances.finish().unwrap();
+    best_instances.sort_unstable_by(|x,y| x.partial_cmp(y).unwrap());
 
     Ok(Response {
         subject_name: subject.name.clone(),
         best_instances,
-        score,
+        minimal_entropy,
     })
 }
 
@@ -312,13 +226,13 @@ pub fn run(precomputed : &mut Precomputed, request : &Request) -> Result<Vec<Pac
     let results : Vec<Result<Response>> = if request.disable_parallelism {
         // run estimation sequentially
         request.subjects.iter().map(
-            |subj| run_one(precomputed, subj.unpack(), &request.models)
+            |subj| run_one(precomputed, request.fc, subj.unpack(), &request.models)
         ).collect()
     } else {
         // run estimation in parallel
         let mut results = Vec::new();
         request.subjects.par_iter().map(
-            |subj| run_one(precomputed, subj.unpack(), &request.models)
+            |subj| run_one(precomputed, request.fc, subj.unpack(), &request.models)
         ).collect_into_vec(&mut results);
         results
     };

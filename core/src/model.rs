@@ -1,12 +1,11 @@
 use alt::Alt;
 use preorder::Preorder;
-use alt_set::{AltSet,AltSetView};
+use alt_set::{AltSet,AltSetView,SingletonView};
 use std::result::Result;
 use linear_preorders;
 use precomputed::Precomputed;
 use precomputed::Error as PreorderError;
 use std::fmt;
-use std::cmp;
 use std::io::{Read,Write};
 use std::iter::FromIterator;
 use codec::{self,Encode,Decode};
@@ -202,44 +201,6 @@ fn undominated_choice(p : &Preorder, menu : AltSetView) -> AltSet {
     ).collect()
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Penalty {
-    // both bounds are inclusive
-    pub lower_bound : u32,
-    pub upper_bound : u32,
-}
-
-impl Penalty {
-    pub fn exact(value : u32) -> Penalty {
-        Penalty{lower_bound: value, upper_bound: value}
-    }
-
-    pub fn merge_min(&mut self, other : &Penalty) {
-        if other.lower_bound < self.lower_bound {
-            self.lower_bound = other.lower_bound;
-        }
-
-        if other.upper_bound < self.upper_bound {
-            self.upper_bound = other.upper_bound;
-        }
-    }
-}
-
-impl Encode for Penalty {
-    fn encode<W : Write>(&self, f : &mut W) -> codec::Result<()> {
-        (self.lower_bound, self.upper_bound).encode(f)
-    }
-}
-
-impl Decode for Penalty {
-    fn decode<R : Read>(f : &mut R) -> codec::Result<Penalty> {
-        Ok(Penalty {
-            lower_bound: Decode::decode(f)?,
-            upper_bound: Decode::decode(f)?,
-        })
-    }
-}
-
 impl Instance {
     pub fn determine_model(&self) -> Model {
         match self {
@@ -365,19 +326,52 @@ impl Instance {
         }
     }
 
-    pub fn penalty(&self, crs : &[ChoiceRow]) -> Penalty {
-        let upper_bound = crs.iter().map(
-            |cr| if cr.choice == self.choice(cr.menu.view(), cr.default) { 0 } else { 1 }
-        ).sum();
-
-        let lower_bound = match self {
+    pub fn entropy(&self, fc : bool, crs : &[ChoiceRow]) -> f64 {
+        match self {
             &Instance::SequentiallyRationalizableChoice(_,_)
-                => cmp::min(1, upper_bound),
+                => panic!("SRC not supported"),
             _
-                => upper_bound,
+                => ()
         };
 
-        Penalty{lower_bound, upper_bound}
+        crs.iter().map(
+            |cr| {
+                let inst_choice = self.choice(cr.menu.view(), cr.default);
+                match cr.choice.view().singleton_view() {
+                    SingletonView::Empty => {
+                        if inst_choice.view().is_empty() {
+                            // match (deferral required)
+                            0f64
+                        } else {
+                            // mismatch
+                            if fc {
+                                (inst_choice.size() as f64).log2()
+                            } else {
+                                ((inst_choice.size() + 1) as f64).log2()
+                            }
+                        }
+                    }
+
+                    SingletonView::Singleton(x) => {
+                        if inst_choice.view().contains(x) {
+                            // match (choice required)
+                            (inst_choice.size() as f64).log2()
+                        } else {
+                            // mismatch
+                            if fc {
+                                (inst_choice.size() as f64).log2()
+                            } else {
+                                ((inst_choice.size() + 1) as f64).log2()
+                            }
+                        }
+                    }
+
+                    SingletonView::NotSingleton => {
+                        panic!("non-singleton choices not supported");
+                    }
+                }
+            }
+        ).sum()
     }
 }
 

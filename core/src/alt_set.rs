@@ -102,6 +102,12 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
+pub enum SingletonView<T> {
+    Empty,
+    Singleton(T),
+    NotSingleton,
+}
+
 impl<'a> AltSetView<'a> {
     pub fn to_blocks(&self) -> &[Block] {
         &self.blocks[..]
@@ -138,6 +144,19 @@ impl<'a> AltSetView<'a> {
 
     pub fn is_strict_superset_of(&self, other : AltSetView) -> bool {
         other.is_strict_subset_of(*self)
+    }
+
+    pub fn singleton_view(&self) -> SingletonView<Alt> {
+        let mut iter = self.iter();
+        if let Some(x) = iter.next() {
+            if let Some(_) = iter.next() {
+                SingletonView::NotSingleton
+            } else {
+                SingletonView::Singleton(x)
+            }
+        } else {
+            SingletonView::Empty
+        }
     }
 
     pub fn size(&self) -> u32 {

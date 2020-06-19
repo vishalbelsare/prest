@@ -60,6 +60,18 @@ impl Decode for f32 {
     }
 }
 
+impl Encode for f64 {
+    fn encode<W : Write>(&self, f : &mut W) -> Result<()> {
+        Ok(f.write_f64::<NativeEndian>(*self)?)
+    }
+}
+
+impl Decode for f64 {
+    fn decode<R : Read>(f : &mut R) -> Result<f64> {
+        Ok(f.read_f64::<NativeEndian>()?)
+    }
+}
+
 #[allow(dead_code)]
 fn encode_bytes<W : Write>(f : &mut W, bytes : &[u8]) -> Result<()> {
     bytes.len().encode(f)?;
