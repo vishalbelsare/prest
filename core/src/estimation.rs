@@ -268,6 +268,27 @@ mod test {
         }
     }
 
+    #[test]
+    fn entropy_basic() {
+        use model::Model;
+        let choices = choices![
+            [1,2] -> [1],
+            [0,1] -> [0],
+            [0,2] -> [2]
+        ];
+        let subject = testsubj(3, choices);
+        let models = [Model::PreorderMaximization(model::PreorderParams{
+            strict: Some(true),
+            total: Some(true),
+        })];
+        let mut precomputed = Precomputed::new(None);
+        precomputed.precompute(3).unwrap();
+        let response = super::run_one(&precomputed, true, &subject, &models).unwrap();
+
+        assert_eq!(response.minimal_entropy, 1.0);
+        assert_eq!(response.best_instances.len(), 1);
+    }
+
     /*
     #[test]
     fn top_two() {
@@ -416,6 +437,7 @@ mod test {
     }
     */
 
+    /*
     #[test]
     fn indecisive() {
         use model::PreorderParams as PP;
@@ -489,4 +511,5 @@ mod test {
             instance: vec![0, 5, 1, 2, 4, 8, 16],
         }]);
     }
+    */
 }
