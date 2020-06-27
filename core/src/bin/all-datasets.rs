@@ -1,10 +1,14 @@
 extern crate prest;
+extern crate base64;
 
 use prest::alt_set::{AltSet};
 use prest::rpc_common::{Subject,ChoiceRow};
 use prest::precomputed::Precomputed;
 use prest::estimation;
 use std::iter::FromIterator;
+
+const NALT : u32 = 4;
+const FC : bool = false;
 
 fn fac(n : u32) -> u32 {
     (1..(n+1)).product()
@@ -40,26 +44,36 @@ fn main() {
 
         let pp = PreorderParams{strict: Some(true), total: None};
 
-        [
-            PreorderMaximization(pp),
-            Unattractiveness(pp),
-            UndominatedChoice{strict: true},
-            PartiallyDominantChoice{fc: false},
-            Overload(pp),
-            SequentialDomination{strict: true},
-        ]
+        if FC {
+            vec![
+                PreorderMaximization(pp),
+                SequentialDomination{strict: true},
+                Overload(pp),
+            ]
+        } else {
+            vec![
+                PreorderMaximization(pp),
+                Unattractiveness(pp),
+                UndominatedChoice{strict: true},
+                PartiallyDominantChoice{fc: false},
+                Overload(pp),
+                SequentialDomination{strict: true},
+            ]
+        }
     };
 
-    for code in 0..datasets_nfc(4) {
+    println!("dataset,entropy,model,instance");
+    for code in 0..datasets_nfc(NALT) {
         let mut j = code;
         let subject = Subject {
             name: code.to_string(),
             alternatives: alts.clone(),
-            choices: AltSet::powerset(4).map(
+            choices: AltSet::powerset(NALT).map(
                 |menu| {
                     let n = menu.size();
-                    let k = j % (n + 1);
-                    j = j / (n + 1);
+                    let n_nfc = if FC { n } else { n + 1 };
+                    let k = j % n_nfc;
+                    j = j / n_nfc;
 
                     let choice = if k == n {
                         AltSet::empty()
@@ -84,10 +98,11 @@ fn main() {
 
         for instance in &response.best_instances {
             println!(
-                "{},{},\"{:?}\"",
+                "{},{},\"{:?}\",{}",
                 code,
                 instance.entropy,
                 instance.model,
+                base64::encode(&instance.instance),
             );
         }
     }
