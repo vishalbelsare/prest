@@ -62,6 +62,11 @@ fn main() {
             println!("{}", fmt_digraph(p, &alt_names, &[]));
         }
 
+        Instance::SequentialDomination(ref p) => {
+            assert_eq!(p.size, alt_names.len() as u32, "preorder size ({}) does not match the number of alternatives ({})", p.size, alt_names.len());
+            println!("{}", fmt_digraph(p, &alt_names, &[]));
+        }
+
         Instance::Unattractiveness{ref p, ref mask} => {
             assert_eq!(p.size, alt_names.len() as u32, "preorder size ({}) does not match the number of alternatives ({})", p.size, alt_names.len());
             let mut attr = Vec::new();
