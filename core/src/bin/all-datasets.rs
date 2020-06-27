@@ -1,10 +1,10 @@
 extern crate prest;
-extern crate byteorder;
 
 use prest::alt_set::{AltSet};
 use prest::rpc_common::{Subject,ChoiceRow};
+use prest::precomputed::Precomputed;
+use prest::estimation;
 use std::iter::FromIterator;
-use rand::Rng;
 
 fn fac(n : u32) -> u32 {
     (1..(n+1)).product()
@@ -27,6 +27,28 @@ fn main() {
         String::from("c"),
         String::from("d")
     ];
+
+    let precomputed = {
+        let mut p = Precomputed::new(None);
+        p.precompute(4).unwrap();
+        p
+    };
+
+    let models = {
+        use prest::model::*;
+        use prest::model::Model::*;
+
+        let pp = PreorderParams{strict: Some(true), total: Some(false)};
+
+        [
+            PreorderMaximization(pp),
+            Unattractiveness(pp),
+            UndominatedChoice{strict: true},
+            PartiallyDominantChoice{fc: false},
+            Overload(pp),
+            SequentialDomination{strict: true},
+        ]
+    };
 
     for code in 0..datasets_nfc(4) {
         let mut j = code;
@@ -55,5 +77,18 @@ fn main() {
                 }
             ).collect()
         };
+
+        let response = estimation::run_one(
+            &precomputed, true, &subject, &models
+        ).unwrap();
+
+        for instance in &response.best_instances {
+            println!(
+                "{},{},{:?}",
+                code,
+                instance.entropy,
+                instance.model,
+            );
+        }
     }
 }
