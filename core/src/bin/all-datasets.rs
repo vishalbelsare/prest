@@ -18,9 +18,9 @@ fn comb(n : u32, k : u32) -> u32 {
     fac(n) / (fac(k) * fac(n-k))
 }
 
-fn datasets_nfc(n : u32) -> u32 {
+fn datasets(n : u32) -> u32 {
     (1..(n+1)).map(|i|
-        (i+1).pow(comb(n, i) as u32)
+        (if FC { i} else {i+1}).pow(comb(n, i) as u32)
     ).product()
 }
 
@@ -63,7 +63,7 @@ fn main() {
     };
 
     println!("dataset,entropy,model,instance");
-    for code in 0..datasets_nfc(NALT) {
+    for code in 0..datasets(NALT) {
         let mut j = code;
         let subject = Subject {
             name: code.to_string(),
