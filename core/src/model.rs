@@ -573,7 +573,7 @@ pub fn traverse_all<F>(
         Model::UndominatedChoice{strict}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(strict), total: Some(false)},
+                PreorderParams{strict: Some(strict), total: None},
                 alt_count,
                 &mut |p| f(Instance::UndominatedChoice(p))
             ).map_err(&ann)?,
@@ -581,7 +581,7 @@ pub fn traverse_all<F>(
         Model::SequentialDomination{strict}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(strict), total: Some(false)},
+                PreorderParams{strict: Some(strict), total: None},
                 alt_count,
                 &mut |p| f(Instance::SequentialDomination(p))
             ).map_err(&ann)?,
@@ -589,7 +589,7 @@ pub fn traverse_all<F>(
         Model::PartiallyDominantChoice{fc}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(true), total: Some(false)},
+                PreorderParams{strict: Some(true), total: None},
                 alt_count,
                 &mut |p| f(Instance::PartiallyDominantChoice{p, fc})
             ).map_err(&ann)?,
@@ -597,7 +597,7 @@ pub fn traverse_all<F>(
         Model::StatusQuoUndominatedChoice
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(true), total: Some(false)},
+                PreorderParams{strict: Some(true), total: None},
                 alt_count,
                 &mut |p| f(Instance::StatusQuoUndominatedChoice(p))
             ).map_err(&ann)?,

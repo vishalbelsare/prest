@@ -38,7 +38,7 @@ fn main() {
         use prest::model::*;
         use prest::model::Model::*;
 
-        let pp = PreorderParams{strict: Some(true), total: Some(false)};
+        let pp = PreorderParams{strict: Some(true), total: None};
 
         [
             PreorderMaximization(pp),
