@@ -8,19 +8,19 @@ use prest::estimation;
 use std::iter::FromIterator;
 
 const NALT : u32 = 4;
-const FC : bool = false;
+const FC : bool = true;
 
-fn fac(n : u32) -> u32 {
+fn fac(n : u64) -> u64 {
     (1..(n+1)).product()
 }
 
-fn comb(n : u32, k : u32) -> u32 {
+fn comb(n : u64, k : u64) -> u64 {
     fac(n) / (fac(k) * fac(n-k))
 }
 
-fn datasets(n : u32) -> u32 {
+fn datasets(n : u64) -> u64 {
     (1..(n+1)).map(|i|
-        (if FC { i} else {i+1}).pow(comb(n, i) as u32)
+        (if FC {i} else {i+1}).pow(comb(n, i) as u32)
     ).product()
 }
 
@@ -63,7 +63,7 @@ fn main() {
     };
 
     println!("dataset,entropy,model,instance");
-    for code in 0..datasets(NALT) {
+    for code in 0..datasets(NALT as u64) {
         let mut j = code;
         let subject = Subject {
             name: code.to_string(),
@@ -72,8 +72,8 @@ fn main() {
                 |menu| {
                     let n = menu.size();
                     let n_nfc = if FC { n } else { n + 1 };
-                    let k = j % n_nfc;
-                    j = j / n_nfc;
+                    let k = (j % n_nfc as u64) as u32;  // u64 mod u32 is safely u32
+                    j = j / n_nfc as u64;
 
                     let choice = if k == n {
                         AltSet::empty()
