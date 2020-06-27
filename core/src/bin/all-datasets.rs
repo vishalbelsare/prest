@@ -84,7 +84,7 @@ fn main() {
 
         for instance in &response.best_instances {
             println!(
-                "{},{},{:?}",
+                "{},{},\"{:?}\"",
                 code,
                 instance.entropy,
                 instance.model,
