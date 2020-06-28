@@ -220,7 +220,7 @@ class EstimationResult(Dataset):
     @staticmethod
     def get_codec_progress() -> CodecProgress:
         DatasetHeaderC_encode, DatasetHeaderC_decode = DatasetHeaderC
-        subjects_size, subjects_encode, subjects_decode = listCP(oneCP(SubjectC))
+        subjects_size, subjects_encode, subjects_decode = listCP(oneCP(PackedSubjectC))
         intC_encode, intC_decode = intC
 
         def get_size(x : 'EstimationResult') -> int:

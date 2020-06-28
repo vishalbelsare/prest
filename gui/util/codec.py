@@ -167,6 +167,7 @@ def namedtupleC(cls : Type, *codecs : Codec) -> Codec:
 
     def encode(f : FileOut, xs : tuple) -> None:
         if len(encodes) != len(xs):
+            #print(f'encodes = {encodes}, xs = {xs}')
             raise CodecError('tuple length mismatch')
 
         for encode, x in zip(encodes, xs):
