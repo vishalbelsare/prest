@@ -8,7 +8,7 @@ use prest::estimation;
 use std::iter::FromIterator;
 
 const NALT : u32 = 4;
-const FC : bool = true;
+const FC : bool = false;
 
 fn fac(n : u64) -> u64 {
     (1..(n+1)).product()
