@@ -160,8 +160,9 @@ impl GenChoices {
                 }
             }
 
-            Instance(ref inst) => {
-                inst.choice(menu, None)
+            Instance(ref _inst) => {
+                unimplemented!("copycat simulations unsupported in this version: FC flag missing");
+                // inst.choice(menu, false, None)
             }
         }
     }

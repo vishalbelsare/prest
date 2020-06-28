@@ -26,7 +26,7 @@ class PreorderMaximization(NamedTuple):
     tag : int = 0
 
 class Unattractiveness(NamedTuple):
-    p : PreorderParams
+    strict : bool
     tag : int = 1
 
 class UndominatedChoice(NamedTuple):
@@ -68,7 +68,7 @@ Model = Union[
 
 ModelC = enumC('Model', {
     PreorderMaximization: (PreorderParamsC,),
-    Unattractiveness: (PreorderParamsC,),
+    Unattractiveness: (boolC,),
     UndominatedChoice: (boolC,),
     PartiallyDominantChoice: (boolC,),
     StatusQuoUndominatedChoice: (),
@@ -84,9 +84,9 @@ SPECIAL_NAMES = {
         'Utility Maximization (Strict)',
     PreorderMaximization(PreorderParams(total=True, strict=False)):
         'Utility Maximization (Non-strict)',
-    Unattractiveness(PreorderParams(total=True, strict=True)):
+    Unattractiveness(strict=True):
         'Utility Maximization with an Outside Option (Strict)',
-    Unattractiveness(PreorderParams(total=True, strict=False)):
+    Unattractiveness(strict=False):
         'Utility Maximization with an Outside Option (Non-strict)',
     PreorderMaximization(PreorderParams(total=False, strict=True)):
         'Maximally Dominant Choice (Strict)',
@@ -119,8 +119,8 @@ SPECIAL_NAMES = {
 ORDERING_INDICES = (
     PreorderMaximization(PreorderParams(total=True, strict=True)),
     PreorderMaximization(PreorderParams(total=True, strict=False)),
-    Unattractiveness(PreorderParams(total=True, strict=True)),
-    Unattractiveness(PreorderParams(total=True, strict=False)),
+    Unattractiveness(strict=True),
+    Unattractiveness(strict=False),
 )
 
 UPPER_BOUND_MODELS = {
@@ -155,9 +155,6 @@ def mgroup(name: str, help_url: Optional[str]=None, *variants : Optional[Tuple[s
 
 def preorder(strict: Optional[bool]=None, total: Optional[bool]=None) -> Model:
     return PreorderMaximization(PreorderParams(strict, total))
-
-def unattractive(strict: Optional[bool]=None, total: Optional[bool]=None) -> Model:
-    return Unattractiveness(PreorderParams(strict, total))
 
 def sublabel(main : str, detail : str) -> str:
     return '{0}<br/><small>{1}</small>'.format(main, detail)
@@ -203,8 +200,8 @@ MODELS = [
         Category('Non-Forced Choice', (
             mgroup('Utility Maximization with an Outside Option',
                 'models/nfc.html#utility-maximization-with-an-outside-option',
-                ('Strict', unattractive(strict=True, total=True)),
-                ('Non-strict', unattractive(strict=False, total=True)),
+                ('Strict', Unattractiveness(strict=True)),
+                ('Non-strict', Unattractiveness(strict=False)),
             ),
             mgroup('Overload-Constrained Utility Maximization',
                 'models/nfc.html#overload-constrained-utility-maximization',

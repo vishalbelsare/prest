@@ -42,21 +42,45 @@ fn main() {
         use prest::model::*;
         use prest::model::Model::*;
 
-        let pp = PreorderParams{strict: Some(true), total: None};
+        let pp_total = PreorderParams{strict: Some(true), total: Some(true)};
+        let pp_non_total = PreorderParams{strict: Some(true), total: Some(false)};
+        let pp_whatever = PreorderParams{strict: Some(true), total: None};
 
         if FC {
             vec![
-                PreorderMaximization(pp),
+                // UM
+                PreorderMaximization(pp_total),
+
+                // SD
                 SequentialDomination{strict: true},
-                Overload(pp),
+
+                // Overload
+                Overload(pp_total),
+
+                // UMOO
+                Unattractiveness{p: pp_total, fc: true},
             ]
         } else {
             vec![
-                PreorderMaximization(pp),
-                Unattractiveness(pp),
-                UndominatedChoice{strict: true},
+                // UM
+                PreorderMaximization(pp_total),
+
+                // UMOO
+                Unattractiveness{p: pp_whatever, fc: false},
+
+                // Overload
+                Overload(pp_whatever),
+
+                // MDC
+                PreorderMaximization(pp_non_total),
+
+                // PDC
                 PartiallyDominantChoice{fc: false},
-                Overload(pp),
+
+                // UC
+                UndominatedChoice{strict: true},
+
+                // SD
                 SequentialDomination{strict: true},
             ]
         }

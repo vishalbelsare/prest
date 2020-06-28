@@ -59,7 +59,7 @@ impl PreorderParams {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Model {
     PreorderMaximization(PreorderParams),
-    Unattractiveness(PreorderParams),
+    Unattractiveness{ strict : bool },  // always with {total: Some(true)}
     UndominatedChoice{ strict: bool },  // always with {total: Some(false)}
 
     PartiallyDominantChoice{
@@ -79,7 +79,7 @@ impl Encode for Model {
     fn encode<W : Write>(&self, f : &mut W) -> codec::Result<()> {
         match self {
             &Model::PreorderMaximization(p) => (0u8, p).encode(f),
-            &Model::Unattractiveness(p) => (1u8, p).encode(f),
+            &Model::Unattractiveness{strict} => (1u8, strict).encode(f),
             &Model::UndominatedChoice{strict} => (2u8,strict).encode(f),
             &Model::PartiallyDominantChoice{fc} => (3u8, fc).encode(f),
             &Model::StatusQuoUndominatedChoice => 4u8.encode(f),
@@ -95,7 +95,7 @@ impl Decode for Model {
     fn decode<R : Read>(f : &mut R) -> codec::Result<Model> {
         match Decode::decode(f)? {
             0u8 => Ok(Model::PreorderMaximization(Decode::decode(f)?)),
-            1u8 => Ok(Model::Unattractiveness(Decode::decode(f)?)),
+            1u8 => Ok(Model::Unattractiveness{strict: Decode::decode(f)?}),
             2u8 => Ok(Model::UndominatedChoice{strict: Decode::decode(f)?}),
             3u8 => Ok(Model::PartiallyDominantChoice{fc: Decode::decode(f)?}),
             4u8 => Ok(Model::StatusQuoUndominatedChoice),
@@ -232,7 +232,8 @@ impl Instance {
                 Model::PreorderMaximization(PreorderParams::from_preorder(p)),
 
             &Instance::Unattractiveness{ref p, mask: ref _mask} =>
-                Model::Unattractiveness(PreorderParams::from_preorder(p)),
+                // strictness of a given preorder is never indeterminate
+                Model::Unattractiveness{strict: PreorderParams::from_preorder(p).strict.unwrap()},
 
             &Instance::UndominatedChoice(ref p) =>
                 Model::UndominatedChoice{strict: p.is_strict()},
@@ -257,7 +258,7 @@ impl Instance {
         }
     }
 
-    pub fn choice(&self, menu : AltSetView, default_opt : Option<Alt>) -> AltSet {
+    pub fn choice(&self, menu : AltSetView, fc : bool, default_opt : Option<Alt>) -> AltSet {
         assert!(menu.is_nonempty());
 
         match self {
@@ -266,8 +267,24 @@ impl Instance {
             }
 
             &Instance::Unattractiveness{ref p, ref mask} => {
+                // in FC, if all offered alternatives are undesirable
+                // all of them should be a correct answer
+                let mut menu_desirable = AltSet::from(menu);
+                menu_desirable &= mask;
+                if fc && menu_desirable.view().is_empty() {
+                    return AltSet::from(menu);
+                }
+
+                // otherwise, there are desirable alternatives so we run UM
+                // (this preorder is always total)
                 let mut result = preorder_maximization(p, menu);
                 result &= mask;
+
+                // in forced choice, the result is always nonempty
+                // because we're maximising a total preorder
+                // and there is at least one desirable alternative
+                assert!(!(fc && result.view().is_empty()));
+
                 result
             }
 
@@ -367,7 +384,7 @@ impl Instance {
 
         crs.iter().map(
             |cr| {
-                let inst_choice = self.choice(cr.menu.view(), cr.default);
+                let inst_choice = self.choice(cr.menu.view(), fc, cr.default);
                 match cr.choice.view().singleton_view() {
                     SingletonView::Empty => {
                         if inst_choice.view().is_empty() {
@@ -524,7 +541,7 @@ fn traverse_preorders<F>(
 
 fn traverse_unattractive<F>(
     precomputed : &Precomputed,
-    preorder_params : PreorderParams,
+    strict : bool,
     alt_count : u32,
     f : &mut F
 ) -> Result<(), PreorderError>
@@ -537,7 +554,7 @@ fn traverse_unattractive<F>(
     // we don't include 0b11111...111 because unattractive=Some(true)
     // it's sufficient to use u32 masks because alt_count is limited by other aspects of the implementation
     for mask_u32 in 0u32 .. (1 << alt_count)-1 {
-        traverse_preorders(precomputed, preorder_params, mask_u32.count_ones(),
+        traverse_preorders(precomputed, PreorderParams{strict: Some(strict), total: Some(true)}, mask_u32.count_ones(),
             &mut |p| f(
                 p.stuff(alt_count, mask_u32),
                 AltSet::from_block(mask_u32),
@@ -565,15 +582,15 @@ pub fn traverse_all<F>(
                 &mut |p| f(Instance::PreorderMaximization(p))
             ).map_err(&ann)?,
 
-        Model::Unattractiveness(preorder_params)
-            => traverse_unattractive(precomputed, preorder_params, alt_count,
+        Model::Unattractiveness{strict}
+            => traverse_unattractive(precomputed, strict, alt_count,
                 &mut |p, mask| f(Instance::Unattractiveness{p, mask})
             ).map_err(&ann)?,
 
         Model::UndominatedChoice{strict}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(strict), total: None},
+                PreorderParams{strict: Some(strict), total: Some(false)},
                 alt_count,
                 &mut |p| f(Instance::UndominatedChoice(p))
             ).map_err(&ann)?,
@@ -581,7 +598,7 @@ pub fn traverse_all<F>(
         Model::SequentialDomination{strict}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(strict), total: None},
+                PreorderParams{strict: Some(strict), total: Some(false)},
                 alt_count,
                 &mut |p| f(Instance::SequentialDomination(p))
             ).map_err(&ann)?,
@@ -589,7 +606,7 @@ pub fn traverse_all<F>(
         Model::PartiallyDominantChoice{fc}
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(true), total: None},
+                PreorderParams{strict: Some(true), total: Some(false)},
                 alt_count,
                 &mut |p| f(Instance::PartiallyDominantChoice{p, fc})
             ).map_err(&ann)?,
@@ -597,7 +614,7 @@ pub fn traverse_all<F>(
         Model::StatusQuoUndominatedChoice
             => traverse_preorders(
                 precomputed,
-                PreorderParams{strict: Some(true), total: None},
+                PreorderParams{strict: Some(true), total: Some(false)},
                 alt_count,
                 &mut |p| f(Instance::StatusQuoUndominatedChoice(p))
             ).map_err(&ann)?,
