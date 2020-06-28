@@ -554,12 +554,17 @@ fn traverse_unattractive<F>(
     // we don't include 0b11111...111 because unattractive=Some(true)
     // it's sufficient to use u32 masks because alt_count is limited by other aspects of the implementation
     for mask_u32 in 0u32 .. (1 << alt_count)-1 {
-        traverse_preorders(precomputed, PreorderParams{strict: Some(strict), total: Some(true)}, mask_u32.count_ones(),
-            &mut |p| f(
-                p.stuff(alt_count, mask_u32),
-                AltSet::from_block(mask_u32),
-            )
-        )?;
+        let desirable_count = mask_u32.count_ones();
+        // take only those masks where at least two alternatives are missing
+        // because 1 missing alternative is unobservable if you do not include singleton menus
+        if desirable_count <= alt_count - 2 {
+            traverse_preorders(precomputed, PreorderParams{strict: Some(strict), total: Some(true)}, desirable_count,
+                &mut |p| f(
+                    p.stuff(alt_count, mask_u32),
+                    AltSet::from_block(mask_u32),
+                )
+            )?;
+        }
     }
 
     Ok(())
