@@ -51,14 +51,14 @@ fn main() {
                 // UM
                 PreorderMaximization(pp_total),
 
-                // SD
-                SequentialDomination{strict: true},
+                // UMOO
+                Unattractiveness{strict: true},
 
                 // Overload
                 Overload(pp_total),
 
-                // UMOO
-                Unattractiveness{p: pp_total, fc: true},
+                // SD
+                SequentialDomination{strict: true},
             ]
         } else {
             vec![
@@ -66,7 +66,7 @@ fn main() {
                 PreorderMaximization(pp_total),
 
                 // UMOO
-                Unattractiveness{p: pp_whatever, fc: false},
+                Unattractiveness{strict: true},
 
                 // Overload
                 Overload(pp_whatever),
