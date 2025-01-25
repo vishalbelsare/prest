@@ -99,8 +99,8 @@ class Core:
         cmdline = [platform_specific.get_embedded_file_path(
             'prest-core.exe',  # deployment Windows
             'prest-core',      # deployment elsewhere (?)
-            'core/target/release/prest-core.exe',  # CI Windows
-            'core/target/release/prest-core',      # CI elsewhere
+            'prest-core/target/release/prest-core.exe',  # CI Windows
+            'prest-core/target/release/prest-core',      # CI elsewhere
         )]
         if fname_precomputed_preorders:
             cmdline += ['--precomputed-preorders', fname_precomputed_preorders]
@@ -170,12 +170,18 @@ class Core:
 
                 else:
                     raise MalformedResponse('invalid response: %s' % msg)
-        except EOF as e:
+        except EOF:
             death_note = self.stderr_reader.get_content().decode('utf8')
             log.warn('core died with message: {0}'.format(death_note))
             raise CoreDeath(death_note)
         except CodecError as e:
+            stderr = self.stderr_reader.get_content().decode('utf8')
+            log.warn('core stderr: {0}'.format(stderr))
             raise MalformedResponse('malformed response from core') from e
+        except Exception:
+            stderr = self.stderr_reader.get_content().decode('utf8')
+            log.warn('core stderr: {0}'.format(stderr))
+            raise
 
     def crash(self) -> None:
         self.call('crash', strC, strC, 'Crash test')

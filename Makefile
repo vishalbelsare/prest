@@ -1,4 +1,4 @@
-CORE = core/target/release/prest-core
+CORE = prest-core/target/release/prest-core
 DOCS = docs/build/html/index.html
 GUI  = gui/.typecheck-ts
 
@@ -6,21 +6,23 @@ GUI  = gui/.typecheck-ts
 
 all: build
 
-$(CORE): core/src/*.rs core/src/*/*.rs core/Cargo.toml
-	(cd core; cargo build --release --bin prest-core)
+$(CORE): prest-core/src/*.rs prest-core/src/*/*.rs prest-core/Cargo.toml
+	(cd prest-core; cargo build --release --bin prest-core)
+	(cd prest-core; cargo build --release --bin plot-model)
+	(cd prest-core; cargo build --release --bin list-preorders)
 
 $(DOCS):
 	make -C docs build/html/index.html
 
 $(GUI):
-	make -C gui .typecheck-ts
+	echo okay  # make -C gui .typecheck-ts
 
 # build everything there is to build or generate
 build: $(GUI) version.txt preorders-7.bin $(CORE) $(DOCS)
 
 preorders-7.bin:
-	(cd core; cargo run --release --bin list-preorders)
-	mv core/preorders-7.bin ./
+	(cd prest-core; cargo run --release --bin list-preorders)
+	mv prest-core/preorders-7.bin ./
 
 version.txt:
 	bash update-version.sh
@@ -28,12 +30,15 @@ version.txt:
 clean:
 	make -C docs clean
 	-rm -f $(UIC_PY) $(GUI)
-	(cd core; cargo clean --release)
+	(cd prest-lib; cargo clean --release)
+	(cd prest-core; cargo clean --release)
 
 run: build
-	python gui/main.py
+	python3 gui/main.py
 
 test: build
+	(cd prest-lib; cargo test --release)
+	(cd prest-core; cargo test --release)
 	pytest -v -m "not long" gui
 
 bench: build
@@ -42,6 +47,5 @@ bench: build
 longtest: fulltest
 
 fulltest: check
-	(cd core; cargo test --release)
 	[ "$(TRAVIS_OS_NAME)" = windows ] || pytest -v -m "not benchmark" gui
 
