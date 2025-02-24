@@ -16,11 +16,12 @@ from dataset import Dataset, DatasetHeaderC, ChoiceRow, \
     Subject, SubjectC, ExportVariant, Analysis, PackedSubject, PackedSubjectC
 from gui.progress import Worker
 from dataset.estimation_result import EstimationResult
-from dataset.consistency_result import ConsistencyResult
+from dataset.stochastic_consistency_result import StochasticConsistencyResult
+from dataset.deterministic_consistency_result import DeterministicConsistencyResult
 from dataset.experiment_stats import ExperimentStats
 from dataset.tuple_intrans_alts import TupleIntransAlts
 from dataset.tuple_intrans_menus import TupleIntransMenus
-import dataset.consistency_result
+import dataset.deterministic_consistency_result
 import dataset.experiment_stats
 import dataset.tuple_intrans_alts
 import dataset.tuple_intrans_menus
@@ -157,15 +158,15 @@ class ExperimentalData(Dataset):
     def label_size(self):
         return '%d subjs, %d observations' % (len(self.subjects), self.observ_count)
 
-    def config_estimation(self) -> Optional[gui.estimation.Options]:
+    def config_estimation(self, _experimental_features : bool) -> Optional[gui.estimation.Options]:
         dlg = gui.estimation.Estimation()
         if dlg.exec() == QDialog.Accepted:
             return dlg.value()
         else:
             return None
 
-    def config_simulation(self) -> Optional['gui.copycat_simulation.Options']:
-        dlg = gui.copycat_simulation.CopycatSimulation(self)
+    def config_simulation(self, experimental_features : bool) -> Optional[gui.copycat_simulation.Options]:
+        dlg = gui.copycat_simulation.CopycatSimulation(self, experimental_features)
         if dlg.exec() == QDialog.Accepted:
             return dlg.value()
         else:
@@ -179,24 +180,37 @@ class ExperimentalData(Dataset):
 
             worker.set_work_size(len(self.subjects) * options.multiplicity)
             position = 0
+            iteration_counter = 0
             for subject_packed in self.subjects:
                 for j in range(options.multiplicity):
-                    response = simulation.run(core, simulation.Request(
-                        name='random%d' % (j+1),
-                        alternatives=self.alternatives,  # we don't use subject.alternatives here
-                        gen_menus=simulation.GenMenus(
-                            generator=simulation.Copycat(subject_packed),
-                            defaults=False,  # this will be ignored, anyway
-                        ),
-                        gen_choices=options.gen_choices,
-                        preserve_deferrals=options.preserve_deferrals,
-                    ))
+                    while True:
+                        iteration_counter += 1
+                        response = simulation.run(core, simulation.Request(
+                            name='random%d' % (j+1),
+                            alternatives=self.alternatives,  # we don't use subject.alternatives here
+                            gen_menus=simulation.GenMenus(
+                                generator=simulation.Copycat(subject_packed),
+                                defaults=False,  # this will be ignored, anyway
+                            ),
+                            gen_choices=options.gen_choices,
+                            preserve_deferrals=options.preserve_deferrals,
+                        ))
 
-                    subjects.append(response.subject_packed)
+                        subject_accepted = gui.subject_filter.accepts(
+                            options.subject_filter,
+                            core,
+                            response.subject_packed,
+                        )
 
-                    position += 1
-                    if position % 1024 == 0:
-                        worker.set_progress(position)
+                        if subject_accepted:
+                            subjects.append(response.subject_packed)
+
+                            position += 1
+                            if iteration_counter % 256 == 0:
+                                worker.set_progress(position)
+                            break
+                        else:
+                            continue
 
         ds = ExperimentalData(name=options.name, alternatives=self.alternatives)
         ds.subjects = subjects
@@ -207,7 +221,7 @@ class ExperimentalData(Dataset):
     class MergeOptions:
         track_deferrals_separately : bool
 
-    def config_merge_choices(self) -> Optional[MergeOptions]:
+    def config_merge_choices(self, _experimental_features : bool) -> Optional[MergeOptions]:
         # hardwire this without UI for now
         return ExperimentalData.MergeOptions(
             track_deferrals_separately=False
@@ -270,7 +284,6 @@ class ExperimentalData(Dataset):
         return ds
 
     def analysis_estimation(self, worker : Worker, options : gui.estimation.Options) -> EstimationResult:
-
         CHUNK_SIZE = 64
         with Core() as core:
             worker.interrupt = lambda: core.shutdown()  # register interrupt hook
@@ -283,6 +296,7 @@ class ExperimentalData(Dataset):
                     models=options.models,
                     disable_parallelism=options.disable_parallelism,
                     disregard_deferrals=options.disregard_deferrals,
+                    distance_score=options.distance_score,
                 )
 
                 responses = core.call(
@@ -295,16 +309,20 @@ class ExperimentalData(Dataset):
 
                 worker.set_progress(len(rows))
 
+            if options.distance_score != gui.estimation.DistanceScore.HOUTMAN_MAKS:
+                suffix = f' (model est., {options.distance_score.value})'
+            else:
+                suffix = ' (model est.)'
+
             ds = EstimationResult(
-                self.name + ' (model est.)',
+                self.name + suffix,
                 self.alternatives,
             )
             ds.subjects = rows
 
         return ds
 
-    # detailed consistency
-    def analysis_consistency(self, worker : Worker, _config : None) -> ConsistencyResult:
+    def analysis_consistency_deterministic(self, worker : Worker, _config : None) -> DeterministicConsistencyResult:
         with Core() as core:
             worker.interrupt = lambda: core.shutdown()  # interrupt hook
 
@@ -313,20 +331,45 @@ class ExperimentalData(Dataset):
             worker.set_work_size(len(self.subjects))
             for i, subject in enumerate(self.subjects):
                 response = core.call(
-                    'consistency',
+                    'consistency-deterministic',
                     PackedSubjectC,
-                    dataset.consistency_result.SubjectRawC,
+                    dataset.deterministic_consistency_result.SubjectRawC,
                     subject
                 )
                 rows.append(response)
 
                 worker.set_progress(i+1)
 
-        ds = ConsistencyResult(
-            self.name + ' (consistency)',
+        ds = DeterministicConsistencyResult(
+            self.name + ' (deterministic consistency)',
             self.alternatives,
         )
         ds.load_from_core(rows)
+        return ds
+
+    def analysis_consistency_stochastic(self, worker : Worker, _config : None) -> StochasticConsistencyResult:
+        with Core() as core:
+            worker.interrupt = lambda: core.shutdown()  # interrupt hook
+
+            rows = []
+
+            worker.set_work_size(len(self.subjects))
+            for i, subject in enumerate(self.subjects):
+                response = core.call(
+                    'consistency-stochastic',
+                    PackedSubjectC,
+                    dataset.stochastic_consistency_result.SubjectC,
+                    subject
+                )
+                rows.append(response)
+
+                worker.set_progress(i+1)
+
+        ds = StochasticConsistencyResult(
+            self.name + ' (stochastic consistency)',
+            self.alternatives,
+        )
+        ds.subjects = rows
         return ds
 
     def analysis_summary_stats(self, worker : Worker, _config : None) -> ExperimentStats:
@@ -463,9 +506,14 @@ class ExperimentalData(Dataset):
                 run=self.analysis_summary_stats,
             ),
             Analysis(
-                name='Consistency analysis',
+                name='Deterministic consistency analysis',
                 config=None,
-                run=self.analysis_consistency,
+                run=self.analysis_consistency_deterministic,
+            ),
+            Analysis(
+                name='Stochastic consistency analysis',
+                config=None,
+                run=self.analysis_consistency_stochastic,
             ),
             Analysis(
                 name='Inconsistent tuples of menus',
