@@ -1,0 +1,32 @@
+[package]
+name = "prest"
+version = "1.1.0"
+authors = [
+	"Georgios Gerasimou <giorgosgerasimou@hotmail.com>",
+	"Matus Tejiscak <ziman@functor.sk>"
+]
+description = "Preference estimation from choice data."
+documentation = "https://prestsoftware.com"
+homepage = "https://prestsoftware.com"
+repository = "https://github.com/prestsoftware/prest"
+license = "BSD-3-Clause"
+edition = "2024"
+
+[dependencies]
+rand = { version = ">=0.9.0", features = ["small_rng"] }
+base64 = ">=0.22.1"
+byteorder = ">=1.5.0"
+num = ">=0.4.3"
+num-bigint = ">=0.4.6"
+num-rational = ">=0.4.2"
+num-integer = ">=0.1.46"
+num-traits = ">=0.2.19"
+rayon = ">=1.10.0"
+csv = ">=1.3.1"
+itertools = ">=0.14.0"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+bench = []

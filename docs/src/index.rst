@@ -3,26 +3,28 @@
 Introduction
 ------------
 
-Prest is an open-source and user-friendly **Windows & macOS desktop application**.
+Prest is an open-source desktop application for behavioural revealed-preference analysis.
 
-It can be used to analyze choice datasets created by economists, psychologists and marketing researchers. 
+It can be used to analyze choice datasets created by experiments or surveys in economics or psychology. 
 
-Its key novelties pertain to general datasets where choice alternatives are discrete. 
+Prest's functions enable the analyst to understand the surveyed decision makers' 
+possible behavioural heuristics and preferences using only information about
+their choices at different menus of feasible options.
 
-Prest allows for estimating non-parametrically the decision maker's preferences from such general datasets.
+|
 
-It does so by finding out how "close" the observed choices are to being explainable by **rational choice or some model of bounded-rational choice**.
+Recently Added Features
+-----------------------
 
-In this way, Prest recovers both the individual's **decision rule** and their **preferences conditional on that rule**.
+* | Since v1.2.0: new suite of stochastic-consistency tests for datasets with menu repetitions.
+  | (support for *stochastic choice functions*)
+  
+* | Since v1.2.0: new measure of model proximity for datasets with multiple choices per menu. 
+  | (support for *choice correspondences*)
+  
+* | Since v1.1.0: visualization of preference-estimation output using `GraphViz <https://graphviz.org>`_ .
 
-Declarations
-------------
-
-*Prest is open-source software and its latest version will always be available online for free.*
-
-
-*Prest does not collect any data entered by its users.*
-
+|
 
 Downloads
 ---------
@@ -34,14 +36,26 @@ Downloads
   No installation required: run by double-clicking the :code:`.command` file.
   Select "Open anyway" if prompted. If the "Open anyway" button is not available,
   close the dialog window and double-click the :code:`.command` file again.
+  
+* Prest VERSION for Linux — Follow these `instructions <https://github.com/prestsoftware/prest?tab=readme-ov-file#building-and-running-prest>`_ to build Prest from source code & run it on any Linux distro.
 
 * The `Prest source code <https://github.com/prestsoftware/prest>`_, written
   in `Rust <https://www.rust-lang.org/>`_ (core) and `Python
   <https://www.python.org/>`_ (graphical user interface).
 
-* New feature since Prest 1.1.0: visualization of preference-estimation output using `GraphViz <https://graphviz.org>`_ 
+Previous downloadable versions of Prest are available in :ref:`the archive <history>`.
 
-* Previous downloadable versions of Prest are available in :ref:`the archive <history>`.
+|
+
+Declarations
+------------
+
+*Prest is open-source software and its latest version will always be available online for free.*
+
+
+*Prest does not collect any data entered by its users.*
+
+|
 
 Documentation
 -------------
@@ -61,6 +75,7 @@ define the terms used in the graphical user interface, and explain relevant back
    workspace/index
    notation/index
    consistency/index
+   estimation/index
    models/index
    simulations/index
    references
@@ -69,13 +84,14 @@ define the terms used in the graphical user interface, and explain relevant back
    copyright/index
    privacy/index
 
+|
 
 Prest Developers
 ----------------
 
 `Georgios Gerasimou <https:georgiosgerasimou.com/>`_ & `Matúš Tejiščák <https://ziman.functor.sk/>`_  
 
-If you use Prest in your work, please cite it as follows: 
+If you use Prest in your work, please cite it: 
 
 Georgios Gerasimou and Matúš Tejiščák (2018) "Prest: Open-Source Software for Computational Revealed Preference Analysis", 
 *Journal of Open Source Software*, 3(30), 1015, `doi:10.21105.joss.01015 <https://doi.org/10.21105/joss.01015>`_.

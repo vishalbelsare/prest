@@ -1,14 +1,15 @@
-import json
 import struct
 import logging
-import base64
 import typing
 import dataclasses
-from io import BytesIO
 import numpy as np
+from enum import Enum
+from io import BytesIO
+from fractions import Fraction
 from dataclasses import dataclass
-from typing import Union, Any, BinaryIO, Type, NewType, NamedTuple, List, \
-    Tuple, Callable, TypeVar, Optional, Dict, Sequence, Generic, cast
+from typing import Any, BinaryIO, NewType, NamedTuple, \
+    Tuple, Callable, TypeVar, Optional, Dict, Sequence, \
+    Generic, cast
 
 log = logging.getLogger(__name__)
 
@@ -192,19 +193,27 @@ def namedtupleC(cls : type[NT], *codecs : Codec) -> Codec[NT]:
 
     return Codec(encode, decode)
 
+
+# there are a couple of type: ignore comments here
+# because DC should be TypeVar('DC', bound=DataclassInstance),
+# according to mypy's error message,
+# but i cannot figure out how on earth we're supposed to import DataclassInstance.
+#
+# let's ignore this for now
+
 DC = TypeVar('DC')
 def dataclassC(cls : type[DC], *codecs : Codec) -> Codec[DC]:
     encodes = [c.encode for c in codecs]
     decodes = [c.decode for c in codecs]
 
-    if len(codecs) != len(dataclasses.fields(cls)):
+    if len(codecs) != len(dataclasses.fields(cls)):  # type: ignore
         raise CodecError('dataclassC: %d codecs provided for dataclass %s' % (
             len(codecs),
             cls,
         ))
 
     def encode(f : FileOut, xs : DC) -> None:
-        xs_tuple = dataclasses.astuple(xs)
+        xs_tuple = dataclasses.astuple(xs)  # type: ignore
         if len(encodes) != len(xs_tuple):
             raise CodecError('tuple length mismatch')
 
@@ -212,7 +221,7 @@ def dataclassC(cls : type[DC], *codecs : Codec) -> Codec[DC]:
             encode(f, x)
 
     def decode(f : FileIn) -> DC:
-        return cls(*[decode(f) for decode in decodes])
+        return cast(DC, cls(*[decode(f) for decode in decodes]))  # type: ignore
 
     return Codec(encode, decode)
 
@@ -248,7 +257,7 @@ def setC(codec : Codec[E]) -> Codec[set[E]]:
     def decode(f : FileIn) -> set[E]:
         return set(_decode(f))
 
-    return Codec(_encode, decode) # type: ignore
+    return Codec(_encode, decode)  # type: ignore
 
 def frozensetC(codec : Codec[E]) -> Codec[frozenset[E]]:
     _encode, _decode = listC(codec).enc_dec()
@@ -257,6 +266,18 @@ def frozensetC(codec : Codec[E]) -> Codec[frozenset[E]]:
         return frozenset(_decode(f))
 
     return Codec(_encode, decode)  # type: ignore
+
+EnumTy = TypeVar('EnumTy', bound=Enum)
+def pyEnumC(cls : type[EnumTy], valC : Codec) -> Codec[EnumTy]:
+    _encode, _decode = valC.enc_dec()
+
+    def encode(f : FileOut, x : EnumTy) -> None:
+        _encode(f, x.value)
+
+    def decode(f : FileIn) -> EnumTy:
+        return cls(Enum(_decode(f)))
+
+    return Codec(encode, decode)
 
 def enumC(name : str, alts : Dict[type, Tuple[Codec, ...]]) -> Codec:
     codecs_enc_get = {
@@ -323,10 +344,10 @@ def enum_by_typenameC(name : str, alts : Sequence[Tuple[type, Codec]]) -> Codec:
     return Codec(encode, decode)
 
 def _noneC() -> Codec[None]:
-    def encode(f : FileOut, x : None) -> None:
+    def encode(_f : FileOut, _x : None) -> None:
         pass
 
-    def decode(f : FileIn) -> None:
+    def decode(_f : FileIn) -> None:
         return None
 
     return Codec(encode, decode)
@@ -400,3 +421,20 @@ def numpyC(dtype : type) -> Codec[np.ndarray]:
         )
 
     return Codec(encode, decode)
+
+def _fractionC() -> Codec[Fraction]:
+    intC_enc, intC_dec = intC.enc_dec()
+
+    def encode(f : FileOut, x : Fraction) -> None:
+        intC_enc(f, x.numerator)
+        intC_enc(f, x.denominator)
+
+    def decode(f : FileIn) -> Fraction:
+        return Fraction(
+            numerator=intC_dec(f),
+            denominator=intC_dec(f),
+        )
+
+    return Codec(encode, decode)
+
+fractionC = _fractionC()

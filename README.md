@@ -1,7 +1,5 @@
 # Prest
 
-[![Build Status](https://travis-ci.org/prestsoftware/prest.svg?branch=master)](https://travis-ci.org/prestsoftware/prest)
-
 Revealed-preference analysis and preference estimation from choice data: https://prestsoftware.com
 
 Reach us at gerasimou AT outlook DOT com  and  ziman AT functor DOT sk.
@@ -22,7 +20,7 @@ documentation at https://prestsoftware.com.
 
 Dependencies:
 * Rust 1.26 stable + Cargo
-* Python 3 (we use 3.6 and 3.7) + pip
+* Python 3.10+
 
 Install the dependencies, compile everything and run:
 
